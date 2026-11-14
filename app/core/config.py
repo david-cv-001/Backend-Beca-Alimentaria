@@ -17,9 +17,9 @@ class Settings(BaseSettings):
 
     jwt_secret_key: str = "change-me-in-production-min-32-chars"
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60
+    access_token_expire_minutes: int = 480
 
-    cors_origins: str = "http://localhost:4200,http://localhost:5173"
+    cors_origins: str = "http://localhost:4200"
 
     face_model_name: str = "Facenet512"
     face_detector_backend: str = "retinaface"
@@ -29,7 +29,8 @@ class Settings(BaseSettings):
     face_align: bool = True
 
     first_superadmin_username: str = "superadmin"
-    first_superadmin_password: str = "change-me"
+    first_superadmin_email: str = "superadmin@beca.com"
+    first_superadmin_password: str = "admin123"
 
 
 settings = Settings()

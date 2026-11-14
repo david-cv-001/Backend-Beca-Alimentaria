@@ -1,16 +1,14 @@
 from contextvars import ContextVar
-from typing import Optional
 from uuid import UUID
 
-
-tenant_id_ctx: ContextVar[Optional[UUID]] = ContextVar("tenant_id", default=None)
+tenant_id_ctx: ContextVar[UUID | None] = ContextVar("tenant_id", default=None)
 
 
 class TenantContext:
     NO_TENANT = UUID(int=0)
 
     @staticmethod
-    def get() -> Optional[UUID]:
+    def get() -> UUID | None:
         return tenant_id_ctx.get()
 
     @staticmethod

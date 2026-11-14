@@ -6,15 +6,13 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-
 from app.core.config import settings
 from app.db.base import Base
 
-# Import models to ensure metadata is populated
-from app.modules.tenants import models as tenants_models  # noqa
-from app.modules.users import models as users_models  # noqa
-from app.modules.students import models as students_models  # noqa
-from app.modules.attendance import models as attendance_models  # noqa
+# Import models to ensure metadata is populated.
+# Al crear un módulo nuevo (students, attendance, ...), agrega aquí su import.
+from app.modules.tenants import models as tenants_models  # noqa: F401
+from app.modules.users import models as users_models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
