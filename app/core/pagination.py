@@ -1,7 +1,7 @@
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Query
-from pydantic import BaseModel
 
 from app.shared.schemas import CamelModel
 
@@ -11,18 +11,21 @@ class PageParams:
 
     El frontend envía ``?page=1&pageSize=10&sortBy=name:asc``.
     ``sortBy`` llega como ``campo:dirección``; la validación de que el campo
-    sea uno permitido la hace cada repositorio.
+    sea uno permitido la hace cada repositorio. Cada recurso puede cambiar el
+    orden por defecto sobreescribiendo ``default_sort``.
     """
+
+    default_sort: str = "created_at:desc"
 
     def __init__(
         self,
         page: Annotated[int, Query(ge=1)] = 1,
         page_size: Annotated[int, Query(ge=1, le=100, alias="pageSize")] = 10,
-        sort_by: Annotated[str, Query(alias="sortBy")] = "created_at:desc",
+        sort_by: Annotated[str | None, Query(alias="sortBy")] = None,
     ) -> None:
         self.page = page
         self.page_size = page_size
-        self.sort_field, self.sort_direction = self._parse_sort(sort_by)
+        self.sort_field, self.sort_direction = self._parse_sort(sort_by or self.default_sort)
 
     @staticmethod
     def _parse_sort(value: str) -> tuple[str, str]:
@@ -62,8 +65,13 @@ class Pagination(CamelModel):
         )
 
 
-class Page[T](BaseModel):
-    """Resultado interno de un listado paginado."""
+@dataclass
+class Page[T]:
+    """Resultado interno de un listado paginado (capa de servicio).
+
+    Es un ``dataclass`` y no un modelo Pydantic: transporta entidades ORM que el
+    router convierte a ``TenantResponse`` / ``UserResponse`` antes de responder.
+    """
 
     items: list[T]
     total: int

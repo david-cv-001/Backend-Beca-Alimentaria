@@ -7,8 +7,6 @@ from app.core.errors import UnauthorizedException
 from app.core.security import verify_password
 from app.modules.users.models import User
 
-PROCESS = "AUTH_LOGIN"
-
 
 async def authenticate(session: AsyncSession, username_or_email: str, password: str) -> User:
     """Valida credenciales y devuelve el usuario.
@@ -28,13 +26,13 @@ async def authenticate(session: AsyncSession, username_or_email: str, password: 
     )
 
     if user is None or not verify_password(password, user.password_hash):
-        raise UnauthorizedException("Usuario o contraseña incorrectos", process=PROCESS)
+        raise UnauthorizedException("Usuario o contraseña incorrectos")
 
     if not user.active:
-        raise UnauthorizedException("La cuenta está desactivada", process=PROCESS)
+        raise UnauthorizedException("La cuenta está desactivada")
 
     if user.tenant_id is not None and (user.tenant is None or not user.tenant.active):
-        raise UnauthorizedException("La cafetería está desactivada", process=PROCESS)
+        raise UnauthorizedException("La cafetería está desactivada")
 
     user.last_login_at = datetime.now(UTC)
     await session.commit()

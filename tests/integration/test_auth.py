@@ -1,32 +1,15 @@
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import hash_password
-from app.modules.users.models import User
 from app.shared.types import Role
+from tests.factories import create_tenant, create_user, login
 
 LOGIN_URL = "/api/v1/auth/login"
 ME_URL = "/api/v1/auth/me"
 
 
-async def _create_superadmin(session: AsyncSession) -> User:
-    user = User(
-        tenant_id=None,
-        role=Role.SUPERADMIN.value,
-        username="superadmin",
-        email="superadmin@beca.com",
-        password_hash=hash_password("admin123"),
-        full_name="Super Administrador",
-        phone="0000000000",
-        active=True,
-    )
-    session.add(user)
-    await session.flush()
-    return user
-
-
 async def test_login_returns_token_and_user(client: AsyncClient, session: AsyncSession) -> None:
-    await _create_superadmin(session)
+    await create_user(session, role=Role.SUPERADMIN, username="superadmin")
 
     response = await client.post(
         LOGIN_URL, json={"usernameOrEmail": "superadmin", "password": "admin123"}
@@ -36,7 +19,7 @@ async def test_login_returns_token_and_user(client: AsyncClient, session: AsyncS
     data = response.json()["data"]
     assert data["accessToken"]
     assert data["user"]["username"] == "superadmin"
-    assert data["user"]["fullName"] == "Super Administrador"
+    assert data["user"]["fullName"] == "Usuario superadmin"
     assert data["user"]["roles"] == ["Superadmin"]
     assert data["user"]["tenantId"] is None
     assert data["user"]["tenantName"] is None
@@ -45,7 +28,7 @@ async def test_login_returns_token_and_user(client: AsyncClient, session: AsyncS
 async def test_login_accepts_email_case_insensitive(
     client: AsyncClient, session: AsyncSession
 ) -> None:
-    await _create_superadmin(session)
+    await create_user(session, role=Role.SUPERADMIN, username="superadmin")
 
     response = await client.post(
         LOGIN_URL, json={"usernameOrEmail": "SUPERADMIN@BECA.COM", "password": "admin123"}
@@ -55,7 +38,7 @@ async def test_login_accepts_email_case_insensitive(
 
 
 async def test_login_wrong_password_is_401(client: AsyncClient, session: AsyncSession) -> None:
-    await _create_superadmin(session)
+    await create_user(session, role=Role.SUPERADMIN, username="superadmin")
 
     response = await client.post(
         LOGIN_URL, json={"usernameOrEmail": "superadmin", "password": "incorrecta"}
@@ -70,7 +53,7 @@ async def test_login_wrong_password_is_401(client: AsyncClient, session: AsyncSe
 
 
 async def test_login_inactive_user_is_401(client: AsyncClient, session: AsyncSession) -> None:
-    user = await _create_superadmin(session)
+    user = await create_user(session, role=Role.SUPERADMIN, username="superadmin")
     user.active = False
     await session.flush()
 
@@ -80,6 +63,20 @@ async def test_login_inactive_user_is_401(client: AsyncClient, session: AsyncSes
 
     assert response.status_code == 401
     assert response.json()["message"] == "La cuenta está desactivada"
+
+
+async def test_login_with_inactive_tenant_is_401(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    tenant = await create_tenant(session, active=False)
+    await create_user(session, role=Role.ADMIN, username="admin1", tenant=tenant)
+
+    response = await client.post(
+        LOGIN_URL, json={"usernameOrEmail": "admin1", "password": "admin123"}
+    )
+
+    assert response.status_code == 401
+    assert response.json()["message"] == "La cafetería está desactivada"
 
 
 async def test_login_missing_fields_is_400(client: AsyncClient) -> None:
@@ -107,11 +104,8 @@ async def test_me_rejects_invalid_token(client: AsyncClient) -> None:
 
 
 async def test_me_returns_authenticated_user(client: AsyncClient, session: AsyncSession) -> None:
-    await _create_superadmin(session)
-    login = await client.post(
-        LOGIN_URL, json={"usernameOrEmail": "superadmin", "password": "admin123"}
-    )
-    token = login.json()["data"]["accessToken"]
+    await create_user(session, role=Role.SUPERADMIN, username="superadmin")
+    token = await login(client, "superadmin")
 
     response = await client.get(ME_URL, headers={"Authorization": f"Bearer {token}"})
 

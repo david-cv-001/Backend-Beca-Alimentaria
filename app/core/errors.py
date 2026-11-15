@@ -11,10 +11,14 @@ class AppException(Exception):
 
     Los servicios lanzan excepciones de dominio; el handler las traduce al
     envelope ``{ process, message, errors }`` que consume el frontend.
+
+    Si ``process`` no se fija explícitamente, el handler usa el nombre de la
+    ruta en curso (``TENANT_CREATE``, ``USER_UPDATE``...), que es el código de
+    operación que el frontend espera. Así los servicios no repiten códigos.
     """
 
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR
-    process: str = "UNEXPECTED_ERROR"
+    process: str | None = None
     default_message: str = "Ocurrió un error inesperado"
 
     def __init__(
@@ -32,31 +36,26 @@ class AppException(Exception):
 
 class BadRequestException(AppException):
     status_code = status.HTTP_400_BAD_REQUEST
-    process = "BAD_REQUEST"
     default_message = "Solicitud inválida"
 
 
 class UnauthorizedException(AppException):
     status_code = status.HTTP_401_UNAUTHORIZED
-    process = "UNAUTHORIZED"
     default_message = "Credenciales inválidas"
 
 
 class ForbiddenException(AppException):
     status_code = status.HTTP_403_FORBIDDEN
-    process = "FORBIDDEN"
     default_message = "No tiene permisos para esta operación"
 
 
 class NotFoundException(AppException):
     status_code = status.HTTP_404_NOT_FOUND
-    process = "NOT_FOUND"
     default_message = "Recurso no encontrado"
 
 
 class ConflictException(AppException):
     status_code = status.HTTP_409_CONFLICT
-    process = "CONFLICT"
     default_message = "Ya existe un registro con ese valor"
 
 
@@ -87,7 +86,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def _handle_app_exception(request: Request, exc: AppException) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
-            content=error_payload(exc.process, exc.message, exc.errors),
+            content=error_payload(exc.process or route_process(request), exc.message, exc.errors),
         )
 
     # FastAPI responde 422 por defecto; se unifica a 400 con nuestro envelope.
