@@ -9,6 +9,7 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import setup_logging
 from app.modules.auth.router import router as auth_router
 from app.modules.tenants.router import router as tenants_router
+from app.modules.users.router import router as users_router
 
 
 @asynccontextmanager
@@ -46,7 +47,7 @@ register_exception_handlers(app)
 # Routers de los módulos. Se agregan a medida que se implementan.
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(tenants_router, prefix=settings.api_v1_prefix)
-#   app.include_router(users_router, prefix=settings.api_v1_prefix)
+app.include_router(users_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/health", tags=["health"])
