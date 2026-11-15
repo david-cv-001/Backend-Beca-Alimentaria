@@ -14,10 +14,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY pyproject.toml uv.lock* ./
+# 1) Instala dependencias primero (capa cacheable). Se usa --no-install-project
+#    porque el código todavía no está copiado; así no intenta construir `app`.
+COPY pyproject.toml uv.lock* README.md ./
+RUN uv sync --frozen --no-dev --no-install-project 2>/dev/null \
+    || uv sync --no-dev --no-install-project
+
+# 2) Copia el código y termina de instalar (ahora sí incluye el paquete `app`).
+COPY . .
 RUN uv sync --frozen --no-dev 2>/dev/null || uv sync --no-dev
 
-COPY . .
 EXPOSE 8080
 
 CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

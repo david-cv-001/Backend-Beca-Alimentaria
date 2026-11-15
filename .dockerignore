@@ -1,0 +1,26 @@
+# Entorno virtual local: NUNCA copiarlo a la imagen (rompe el .venv del contenedor)
+.venv/
+venv/
+
+# Control de versiones y metadatos
+.git/
+.gitignore
+.github/
+
+# Cachés de Python y herramientas
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Secretos y locales
+.env
+*.local
+
+# Documentación (no se necesita en runtime)
+docs/
