@@ -131,6 +131,14 @@ def test_unknown_route_uses_envelope(client: TestClient) -> None:
             "role: El rol no es válido",
         ),
         (
+            {
+                "type": "time_parsing",
+                "loc": ("breakfastStart",),
+                "msg": "Input should be a valid time",
+            },
+            "breakfastStart: No es una hora válida",
+        ),
+        (
             # Sin traducción conocida: se conserva el mensaje técnico (inglés).
             {"type": "untranslated_type", "loc": ("x",), "msg": "technical english"},
             "x: technical english",

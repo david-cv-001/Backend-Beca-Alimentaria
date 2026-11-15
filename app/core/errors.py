@@ -91,6 +91,7 @@ VALIDATION_MESSAGES: dict[str, str] = {
     "uuid_parsing": "No es un identificador válido",
     "enum": "No es un valor permitido",
     "datetime_parsing": "No es una fecha válida",
+    "time_parsing": "No es una hora válida",
 }
 
 _EMAIL_REASON_MESSAGE = "El correo no es válido"

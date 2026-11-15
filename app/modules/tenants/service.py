@@ -35,6 +35,10 @@ class TenantService:
             folio=data.folio,
             name=data.name,
             representative=data.representative,
+            breakfast_start=data.breakfast_start,
+            breakfast_end=data.breakfast_end,
+            lunch_start=data.lunch_start,
+            lunch_end=data.lunch_end,
             active=data.active,
         )
         await self.repository.add(tenant)
@@ -48,6 +52,10 @@ class TenantService:
         tenant.folio = data.folio
         tenant.name = data.name
         tenant.representative = data.representative
+        tenant.breakfast_start = data.breakfast_start
+        tenant.breakfast_end = data.breakfast_end
+        tenant.lunch_start = data.lunch_start
+        tenant.lunch_end = data.lunch_end
         tenant.active = data.active
         if not data.active:
             await self.repository.deactivate_users(tenant_id)

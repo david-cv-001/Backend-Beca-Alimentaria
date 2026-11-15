@@ -11,6 +11,22 @@ def _auth(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _tenant_payload(**overrides: object) -> dict[str, object]:
+    """Payload de cafetería con horarios válidos; cada test sobreescribe lo que necesita."""
+    payload: dict[str, object] = {
+        "folio": "CAF-001",
+        "name": "Cafetería Central",
+        "representative": "Ana Torres",
+        "breakfastStart": "07:00",
+        "breakfastEnd": "10:00",
+        "lunchStart": "13:00",
+        "lunchEnd": "16:00",
+        "active": True,
+    }
+    payload.update(overrides)
+    return payload
+
+
 async def _superadmin_token(client: AsyncClient, session: AsyncSession) -> str:
     await create_user(session, role=Role.SUPERADMIN, username="superadmin")
     return await login(client, "superadmin")
@@ -93,6 +109,8 @@ async def test_get_tenant(client: AsyncClient, session: AsyncSession) -> None:
 
     assert response.status_code == 200
     assert response.json()["data"]["folio"] == "CAF-001"
+    assert response.json()["data"]["breakfastStart"] == "07:00"
+    assert response.json()["data"]["lunchEnd"] == "16:00"
 
 
 async def test_get_tenant_not_found(client: AsyncClient, session: AsyncSession) -> None:
@@ -112,7 +130,7 @@ async def test_create_tenant_normalizes_folio(client: AsyncClient, session: Asyn
     response = await client.post(
         TENANTS_URL,
         headers=_auth(token),
-        json={"folio": "caf-009", "name": "Cafetería Nueva", "representative": "Ana Torres"},
+        json=_tenant_payload(folio="caf-009", name="Cafetería Nueva"),
     )
 
     assert response.status_code == 201
@@ -131,7 +149,7 @@ async def test_create_tenant_duplicate_folio_is_409(
     response = await client.post(
         TENANTS_URL,
         headers=_auth(token),
-        json={"folio": "caf-001", "name": "Otra Cafetería", "representative": "Ana Torres"},
+        json=_tenant_payload(folio="caf-001", name="Otra Cafetería"),
     )
 
     assert response.status_code == 409
@@ -148,11 +166,7 @@ async def test_create_tenant_duplicate_name_case_insensitive_is_409(
     response = await client.post(
         TENANTS_URL,
         headers=_auth(token),
-        json={
-            "folio": "CAF-002",
-            "name": "cafetería central",
-            "representative": "Ana Torres",
-        },
+        json=_tenant_payload(folio="CAF-002", name="cafetería central"),
     )
 
     assert response.status_code == 409
@@ -167,7 +181,7 @@ async def test_create_tenant_invalid_folio_is_400(
     response = await client.post(
         TENANTS_URL,
         headers=_auth(token),
-        json={"folio": "ab", "name": "Cafetería Mala", "representative": "Ana Torres"},
+        json=_tenant_payload(folio="ab", name="Cafetería Mala"),
     )
 
     assert response.status_code == 400
@@ -185,11 +199,104 @@ async def test_create_tenant_rejects_symbols_in_name(
     response = await client.post(
         TENANTS_URL,
         headers=_auth(token),
-        json={"folio": "CAF-010", "name": "Cafe <script>", "representative": "Ana Torres"},
+        json=_tenant_payload(folio="CAF-010", name="Cafe <script>"),
     )
 
     assert response.status_code == 400
     assert response.json()["process"] == "TENANT_CREATE"
+
+
+async def test_create_tenant_stores_meal_schedule(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    token = await _superadmin_token(client, session)
+
+    response = await client.post(
+        TENANTS_URL,
+        headers=_auth(token),
+        json=_tenant_payload(
+            breakfastStart="07:30",
+            breakfastEnd="10:30",
+            lunchStart="14:00",
+            lunchEnd="17:00",
+        ),
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["breakfastStart"] == "07:30"
+    assert data["breakfastEnd"] == "10:30"
+    assert data["lunchStart"] == "14:00"
+    assert data["lunchEnd"] == "17:00"
+
+
+async def test_create_tenant_accepts_seconds_in_meal_time(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    token = await _superadmin_token(client, session)
+
+    response = await client.post(
+        TENANTS_URL,
+        headers=_auth(token),
+        json=_tenant_payload(breakfastStart="07:00:00", breakfastEnd="10:00:00"),
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["breakfastStart"] == "07:00"
+    assert data["breakfastEnd"] == "10:00"
+
+
+async def test_create_tenant_requires_meal_schedule(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    token = await _superadmin_token(client, session)
+
+    response = await client.post(
+        TENANTS_URL,
+        headers=_auth(token),
+        json={"folio": "CAF-001", "name": "Cafetería Central", "representative": "Ana Torres"},
+    )
+
+    assert response.status_code == 400
+    errors = response.json()["errors"]
+    assert "breakfastStart: Este campo es obligatorio" in errors
+    assert "breakfastEnd: Este campo es obligatorio" in errors
+    assert "lunchStart: Este campo es obligatorio" in errors
+    assert "lunchEnd: Este campo es obligatorio" in errors
+
+
+async def test_create_tenant_invalid_meal_time_is_400(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    token = await _superadmin_token(client, session)
+
+    response = await client.post(
+        TENANTS_URL,
+        headers=_auth(token),
+        json=_tenant_payload(breakfastStart="25:00"),
+    )
+
+    assert response.status_code == 400
+    assert "breakfastStart: No es una hora válida" in response.json()["errors"]
+
+
+async def test_create_tenant_end_before_start_is_400(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    token = await _superadmin_token(client, session)
+
+    response = await client.post(
+        TENANTS_URL,
+        headers=_auth(token),
+        json=_tenant_payload(breakfastEnd="06:00"),
+    )
+
+    assert response.status_code == 400
+    assert (
+        "breakfastEnd: La hora de fin debe ser posterior a la hora de inicio"
+        in response.json()["errors"]
+    )
 
 
 async def test_update_tenant(client: AsyncClient, session: AsyncSession) -> None:
@@ -199,12 +306,7 @@ async def test_update_tenant(client: AsyncClient, session: AsyncSession) -> None
     response = await client.put(
         f"{TENANTS_URL}/{tenant.id}",
         headers=_auth(token),
-        json={
-            "folio": "CAF-001",
-            "name": "Cafetería Renombrada",
-            "representative": "Ana Torres",
-            "active": True,
-        },
+        json=_tenant_payload(name="Cafetería Renombrada"),
     )
 
     assert response.status_code == 200
@@ -219,12 +321,7 @@ async def test_update_tenant_conflict_is_409(client: AsyncClient, session: Async
     response = await client.put(
         f"{TENANTS_URL}/{tenant.id}",
         headers=_auth(token),
-        json={
-            "folio": "CAF-001",
-            "name": "Cafetería Sur",
-            "representative": "Ana Torres",
-            "active": True,
-        },
+        json=_tenant_payload(name="Cafetería Sur"),
     )
 
     assert response.status_code == 409
@@ -240,15 +337,28 @@ async def test_update_tenant_keeping_own_values_is_ok(
     response = await client.put(
         f"{TENANTS_URL}/{tenant.id}",
         headers=_auth(token),
-        json={
-            "folio": "CAF-001",
-            "name": "Cafetería Central",
-            "representative": "Otra Persona",
-            "active": True,
-        },
+        json=_tenant_payload(representative="Otra Persona"),
     )
 
     assert response.status_code == 200
+
+
+async def test_update_tenant_changes_meal_schedule(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    token = await _superadmin_token(client, session)
+    tenant = await create_tenant(session, folio="CAF-001", name="Cafetería Central")
+
+    response = await client.put(
+        f"{TENANTS_URL}/{tenant.id}",
+        headers=_auth(token),
+        json=_tenant_payload(lunchStart="12:30", lunchEnd="15:30"),
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["lunchStart"] == "12:30"
+    assert data["lunchEnd"] == "15:30"
 
 
 async def test_change_status_deactivates_tenant_users(
