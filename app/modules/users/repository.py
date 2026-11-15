@@ -3,8 +3,10 @@ from uuid import UUID
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import contains_eager
 
 from app.core.errors import BadRequestException
+from app.modules.tenants.models import Tenant
 from app.modules.users.models import User
 
 
@@ -17,6 +19,10 @@ class UserRepository:
         "fullName": User.full_name,
         "full_name": User.full_name,
         "role": User.role,
+        "phone": User.phone,
+        "email": User.email,
+        "tenantName": Tenant.name,
+        "tenant_name": Tenant.name,
         "active": User.active,
         "createdAt": User.created_at,
         "created_at": User.created_at,
@@ -26,8 +32,14 @@ class UserRepository:
         self.session = session
 
     def _base(self, tenant_id: UUID | None) -> Select[Any]:
-        """Consulta base; ``tenant_id`` no nulo aplica el aislamiento multi-tenant."""
-        stmt = select(User)
+        """Consulta base; ``tenant_id`` no nulo aplica el aislamiento multi-tenant.
+
+        El join con ``tenants`` es explícito (``contains_eager``) para poder
+        ordenar por ``tenantName``; si se dejara al eager load, SQLAlchemy
+        crearía un alias y el ``ORDER BY`` apuntaría a una tabla ausente del
+        ``FROM``. ``isouter=True`` conserva al superadmin (sin cafetería).
+        """
+        stmt = select(User).join(User.tenant, isouter=True).options(contains_eager(User.tenant))
         if tenant_id is not None:
             stmt = stmt.where(User.tenant_id == tenant_id)
         return stmt

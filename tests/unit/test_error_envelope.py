@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from fastapi import FastAPI, Query
@@ -10,6 +11,7 @@ from app.core.errors import (
     ForbiddenException,
     NotFoundException,
     UnauthorizedException,
+    _format_validation_error,
     register_exception_handlers,
 )
 
@@ -74,3 +76,66 @@ def test_unknown_route_uses_envelope(client: TestClient) -> None:
 
     assert response.status_code == 404
     assert set(response.json()) == {"process", "message", "errors"}
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (
+            {"type": "missing", "loc": ("email",), "msg": "Field required"},
+            "email: Este campo es obligatorio",
+        ),
+        (
+            {
+                "type": "string_too_short",
+                "loc": ("username",),
+                "msg": "String should have at least 3 characters",
+                "ctx": {"min_length": 3},
+            },
+            "username: Debe tener al menos 3 caracteres",
+        ),
+        (
+            {
+                "type": "string_too_long",
+                "loc": ("phone",),
+                "msg": "String should have at most 15 characters",
+                "ctx": {"max_length": 15},
+            },
+            "phone: No puede superar los 15 caracteres",
+        ),
+        (
+            {
+                "type": "string_pattern_mismatch",
+                "loc": ("folio",),
+                "msg": "String should match pattern '^[A-Z0-9-]+$'",
+                "ctx": {"pattern": "^[A-Z0-9-]+$"},
+            },
+            "folio: El formato no es válido",
+        ),
+        (
+            {
+                "type": "value_error",
+                "loc": ("email",),
+                "msg": "value is not a valid email address: An email address must have an @-sign.",
+                "ctx": {"reason": "An email address must have an @-sign."},
+            },
+            "email: El correo no es válido",
+        ),
+        (
+            {
+                "type": "value_error",
+                "loc": ("role",),
+                "msg": "Value error, El rol no es válido",
+                "ctx": {"error": ValueError("El rol no es válido")},
+            },
+            "role: El rol no es válido",
+        ),
+        (
+            # Sin traducción conocida: se conserva el mensaje técnico (inglés).
+            {"type": "untranslated_type", "loc": ("x",), "msg": "technical english"},
+            "x: technical english",
+        ),
+    ],
+)
+def test_validation_messages_are_translated(error: dict[str, Any], expected: str) -> None:
+    assert _format_validation_error(error) == expected

@@ -16,6 +16,7 @@ class TenantRepository:
     SORTABLE: dict[str, Any] = {
         "folio": Tenant.folio,
         "name": Tenant.name,
+        "representative": Tenant.representative,
         "active": Tenant.active,
         "createdAt": Tenant.created_at,
         "created_at": Tenant.created_at,

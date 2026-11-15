@@ -45,7 +45,12 @@ class UserWriteRequest(CamelModel):
     @classmethod
     def _role_from_api(cls, value: object) -> object:
         # El frontend envía PascalCase ("Checker"); el dominio usa MAYÚSCULAS.
-        return Role.from_api(value).value if isinstance(value, str) else value
+        if not isinstance(value, str):
+            return value
+        try:
+            return Role.from_api(value).value
+        except ValueError as exc:
+            raise ValueError("El rol no es válido") from exc
 
 
 class CreateUserRequest(UserWriteRequest):

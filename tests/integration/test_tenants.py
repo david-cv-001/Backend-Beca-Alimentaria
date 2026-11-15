@@ -67,6 +67,24 @@ async def test_list_tenants_invalid_sort_field_is_400(
     assert response.json()["process"] == "TENANT_LIST"
 
 
+async def test_list_tenants_sorts_by_representative(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    token = await _superadmin_token(client, session)
+    await create_tenant(session, folio="CAF-002", name="Cafetería Beta", representative="Zoe Ramos")
+    await create_tenant(
+        session, folio="CAF-001", name="Cafetería Alfa", representative="Ana Torres"
+    )
+
+    response = await client.get(
+        TENANTS_URL, headers=_auth(token), params={"sortBy": "representative:asc"}
+    )
+
+    assert response.status_code == 200
+    representatives = [tenant["representative"] for tenant in response.json()["data"]]
+    assert representatives == ["Ana Torres", "Zoe Ramos"]
+
+
 async def test_get_tenant(client: AsyncClient, session: AsyncSession) -> None:
     token = await _superadmin_token(client, session)
     tenant = await create_tenant(session, folio="CAF-001", name="Cafetería Central")
@@ -156,7 +174,7 @@ async def test_create_tenant_invalid_folio_is_400(
     body = response.json()
     assert body["process"] == "TENANT_CREATE"
     assert body["message"] == "Datos inválidos"
-    assert any("folio" in error for error in body["errors"])
+    assert "folio: Debe tener al menos 3 caracteres" in body["errors"]
 
 
 async def test_create_tenant_rejects_symbols_in_name(

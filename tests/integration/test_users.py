@@ -88,6 +88,58 @@ async def test_list_users_invalid_sort_field_is_400(
     assert response.json()["process"] == "USER_LIST"
 
 
+async def test_list_users_sorts_by_email(client: AsyncClient, session: AsyncSession) -> None:
+    token = await _superadmin_token(client, session)
+    tenant = await create_tenant(session)
+    await create_user(session, role=Role.CHECKER, username="zulu", tenant=tenant)
+    await create_user(session, role=Role.CHECKER, username="alfa", tenant=tenant)
+
+    response = await client.get(USERS_URL, headers=_auth(token), params={"sortBy": "email:desc"})
+
+    assert response.status_code == 200
+    emails = [user["email"] for user in response.json()["data"]]
+    assert emails == sorted(emails, reverse=True)
+
+
+async def test_list_users_sorts_by_phone(client: AsyncClient, session: AsyncSession) -> None:
+    token = await _superadmin_token(client, session)
+    tenant = await create_tenant(session)
+    high = await create_user(session, role=Role.CHECKER, username="zulu", tenant=tenant)
+    low = await create_user(session, role=Role.CHECKER, username="alfa", tenant=tenant)
+    high.phone = "5551000009"
+    low.phone = "5551000001"
+    await session.flush()
+
+    response = await client.get(USERS_URL, headers=_auth(token), params={"sortBy": "phone:asc"})
+
+    assert response.status_code == 200
+    phones = [user["phone"] for user in response.json()["data"]]
+    assert phones == sorted(phones)
+
+
+async def test_list_users_sorts_by_tenant_name_and_keeps_superadmin(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    token = await _superadmin_token(client, session)
+    beta = await create_tenant(session, folio="CAF-002", name="Cafetería Beta")
+    alfa = await create_tenant(session, folio="CAF-001", name="Cafetería Alfa")
+    await create_user(session, role=Role.CHECKER, username="en_beta", tenant=beta)
+    await create_user(session, role=Role.CHECKER, username="en_alfa", tenant=alfa)
+
+    response = await client.get(
+        USERS_URL, headers=_auth(token), params={"sortBy": "tenantName:asc"}
+    )
+
+    assert response.status_code == 200
+    tenant_names = [user["tenantName"] for user in response.json()["data"]]
+    # El superadmin no tiene cafetería y no debe desaparecer del listado.
+    assert None in tenant_names
+    assert [name for name in tenant_names if name is not None] == [
+        "Cafetería Alfa",
+        "Cafetería Beta",
+    ]
+
+
 async def test_list_users_forbidden_for_checker(client: AsyncClient, session: AsyncSession) -> None:
     tenant = await create_tenant(session)
     await create_user(session, role=Role.CHECKER, username="checker1", tenant=tenant)
@@ -290,7 +342,7 @@ async def test_create_user_invalid_username_is_400(
     assert response.status_code == 400
     body = response.json()
     assert body["process"] == "USER_CREATE"
-    assert any("username" in error for error in body["errors"])
+    assert "username: Debe tener al menos 3 caracteres" in body["errors"]
 
 
 async def test_create_user_invalid_email_is_400(client: AsyncClient, session: AsyncSession) -> None:
@@ -304,7 +356,32 @@ async def test_create_user_invalid_email_is_400(client: AsyncClient, session: As
     )
 
     assert response.status_code == 400
-    assert any("email" in error for error in response.json()["errors"])
+    assert "email: El correo no es válido" in response.json()["errors"]
+
+
+async def test_create_user_invalid_role_message_is_spanish(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    token = await _superadmin_token(client, session)
+    tenant = await create_tenant(session)
+
+    response = await client.post(
+        USERS_URL, headers=_auth(token), json=_payload(role="Jefe", tenantId=str(tenant.id))
+    )
+
+    assert response.status_code == 400
+    assert "role: El rol no es válido" in response.json()["errors"]
+
+
+async def test_create_user_missing_fields_message_is_spanish(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    token = await _superadmin_token(client, session)
+
+    response = await client.post(USERS_URL, headers=_auth(token), json={})
+
+    assert response.status_code == 400
+    assert "username: Este campo es obligatorio" in response.json()["errors"]
 
 
 async def test_create_user_short_password_is_400(
@@ -320,7 +397,7 @@ async def test_create_user_short_password_is_400(
     )
 
     assert response.status_code == 400
-    assert any("password" in error for error in response.json()["errors"])
+    assert "password: Debe tener al menos 8 caracteres" in response.json()["errors"]
 
 
 async def test_create_user_unknown_tenant_is_400(
