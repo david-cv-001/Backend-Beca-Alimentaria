@@ -3,10 +3,16 @@ from app.shared.schemas import CamelModel
 
 
 class ApiResponse[T](CamelModel):
-    """Envelope de éxito: toda respuesta exitosa va dentro de ``data``."""
+    """Envelope de éxito para una respuesta de un solo recurso."""
 
     data: T
-    pagination: Pagination | None = None
+
+
+class PaginatedResponse[T](CamelModel):
+    """Envelope de éxito para un listado: añade el bloque ``pagination``."""
+
+    data: list[T]
+    pagination: Pagination
 
 
 class ApiError(CamelModel):

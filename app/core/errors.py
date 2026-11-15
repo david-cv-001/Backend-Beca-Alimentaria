@@ -64,7 +64,12 @@ def error_payload(process: str, message: str, errors: list[str] | None = None) -
     return {"process": process, "message": message, "errors": errors or []}
 
 
-def _route_process(request: Request) -> str:
+def route_process(request: Request) -> str:
+    """Código ``process`` del endpoint en curso (nombre de la ruta).
+
+    Los routers declaran ``name="TENANT_CREATE"`` etc. para que los errores de
+    validación y de autorización hereden el código de la operación.
+    """
     route = request.scope.get("route")
     return getattr(route, "name", None) or "API_ERROR"
 
@@ -93,7 +98,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content=error_payload(
-                _route_process(request),
+                route_process(request),
                 "Datos inválidos",
                 [_format_validation_error(error) for error in exc.errors()],
             ),
@@ -104,5 +109,5 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def _handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
-            content=error_payload(_route_process(request), str(exc.detail)),
+            content=error_payload(route_process(request), str(exc.detail)),
         )
